@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# vim: ft=bash
+set -euo pipefail
+
+# Usage: tmux-nvim-opencode [directory]
+if [[ $# -ge 1 ]]; then
+  cd -- "$1"
+fi
+
+command -v tmux >/dev/null 2>&1 || {
+  echo "Error: tmux is not in PATH." >&2
+  exit 1
+}
+
+directory=$(pwd -P)
+
+# Session name: repo toplevel (if any) or basename + short hash of absolute path
+if git_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  base_name=$(basename -- "$git_root")
+else
+  base_name=$(basename -- "$directory")
+fi
+base_name="${base_name#.}"
+hash_suffix=$(printf '%s' "$directory" | md5sum | cut -c1-6)
+project=$(printf '%s-%s' "$base_name" "$hash_suffix" | sed 's/[^A-Za-z0-9_.-]/-/g')
+
+# Right/bottom command: opencode if available, else login shell
+other_cmd="opencode"
+command -v opencode >/dev/null 2>&1 || other_cmd="${SHELL:-bash}"
+
+# Determine terminal size for orientation
+if [[ -n "${TMUX-}" ]]; then
+  term_w=$(tmux display-message -p "#{client_width}")
+  term_h=$(tmux display-message -p "#{client_height}")
+else
+  term_w=$(tput cols || echo 80)
+  term_h=$(tput lines || echo 24)
+fi
+
+# Optional manual override: TMUX_SPLIT_ORIENT=landscape|portrait|auto
+case "${TMUX_SPLIT_ORIENT:-auto}" in
+  landscape) orient="landscape" ;;
+  portrait)  orient="portrait" ;;
+  *)         orient=$([[ "$term_w" -gt "$term_h" ]] && echo landscape || echo portrait) ;;
+esac
+
+# Create the session only if it doesn't exist
+if ! tmux has-session -t "=${project}" 2>/dev/null; then
+  tmux new-session -d -s "$project" -c "$directory" -n editor "nvim"
+  # Capture the original pane id (nvim)
+  root_pane=$(tmux list-panes -t "=${project}":editor -F "#{pane_id}" | head -n1)
+
+  if [[ "$orient" == "landscape" ]]; then
+    # Side-by-side; put opencode on the right
+    tmux split-window -h -t "$root_pane" -c "$directory" "$other_cmd"
+    tmux select-layout -t "=${project}":editor even-horizontal
+  else
+    # Stacked; put opencode at the bottom
+    tmux split-window -v -t "$root_pane" -c "$directory" "$other_cmd"
+    tmux select-layout -t "=${project}":editor even-vertical
+  fi
+
+  # Focus back to nvim (original pane)
+  tmux select-pane -t "$root_pane"
+fi
+
+# Attach or switch to the session
+if [[ -n "${TMUX-}" ]]; then
+  tmux switch-client -t "=${project}"
+else
+  exec tmux attach-session -t "=${project}"
+fi
