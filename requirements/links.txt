@@ -1,3 +1,4 @@
 # Format:
 # SOURCE DEST
 bin/tpai ~/.local/bin/tpai
+config/opencode ~/.config/opencode
