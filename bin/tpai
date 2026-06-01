@@ -2,7 +2,7 @@
 # vim: ft=bash
 set -euo pipefail
 
-# Usage: tmux-nvim-opencode [directory]
+# Usage: tpai [directory]
 if [[ $# -ge 1 ]]; then
   cd -- "$1"
 fi
@@ -25,7 +25,7 @@ hash_suffix=$(printf '%s' "$directory" | md5sum | cut -c1-6)
 project=$(printf '%s-%s' "$base_name" "$hash_suffix" | sed 's/[^A-Za-z0-9_.-]/-/g')
 
 # Right/bottom command: opencode if available, else login shell
-other_cmd="opencode"
+other_cmd="opencode -c"
 command -v opencode >/dev/null 2>&1 || other_cmd="${SHELL:-bash}"
 
 # Determine terminal size for orientation
@@ -41,7 +41,13 @@ fi
 case "${TMUX_SPLIT_ORIENT:-auto}" in
   landscape) orient="landscape" ;;
   portrait)  orient="portrait" ;;
-  *)         orient=$([[ "$term_w" -gt "$term_h" ]] && echo landscape || echo portrait) ;;
+  *)
+    if (( term_w > 3*term_h )); then
+      orient="landscape"
+    else
+      orient="portrait"
+    fi
+    ;;
 esac
 
 # Create the session only if it doesn't exist

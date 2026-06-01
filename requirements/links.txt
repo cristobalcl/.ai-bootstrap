@@ -1,4 +1,5 @@
 # Format:
 # SOURCE DEST
 bin/tpai ~/.local/bin/tpai
-config/opencode ~/.config/opencode
+config/opencode/opencode.jsonc ~/.config/opencode/opencode.jsonc
+# config/agents ~/.agents
